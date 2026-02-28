@@ -1,36 +1,141 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Website Portal MVP
 
-## Getting Started
+A self-service website management portal where clients can request changes to their websites. AI processes the requests, pushes to a staging branch, client previews and approves, then it goes to production.
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Magic Link Authentication** - Passwordless login via email
+- **Client Dashboard** - View your websites and change requests
+- **Change Request System** - Submit detailed change requests
+- **Status Tracking** - Follow requests from pending → staging → deployed
+- **Preview & Approval** - Review staging previews before going live
+- **GitHub Integration** - Automatic branch and PR management
+- **Vercel Integration** - Preview deployment links
+
+## Architecture
+
+- **Framework:** Next.js 15 (App Router)
+- **Auth:** Magic link email via Resend (JWT tokens in cookies)
+- **Hosting:** Vercel
+- **Database:** In-memory (MVP) - Replace with Vercel Postgres/Upstash Redis for production
+- **APIs:** GitHub (Octokit), Vercel API
+
+## Setup
+
+### Prerequisites
+
+- Node.js 18+
+- GitHub account with repo access
+- Vercel account
+- Resend account for sending emails
+
+### Environment Variables
+
+Create a `.env.local` file:
+
+```env
+GITHUB_TOKEN=your_github_token
+VERCEL_API_KEY=your_vercel_token
+RESEND_API_KEY=your_resend_key
+JWT_SECRET=your_jwt_secret
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Installation
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Visit http://localhost:3000
 
-## Learn More
+### Deploy to Vercel
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npx vercel --prod
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Or connect the GitHub repo to Vercel for automatic deployments.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Usage
 
-## Deploy on Vercel
+### For Clients
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Visit the portal and enter your email
+2. Click the magic link sent to your email
+3. View your websites on the dashboard
+4. Click "Request Change" on a website
+5. Describe the changes you want in detail
+6. Wait for the changes to be staged
+7. Review the preview deployment
+8. Approve or reject with feedback
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### For Admins (Phase 2)
+
+- AI-powered code generation (not yet implemented)
+- Manual code changes pushed to staging branches
+- Staging branch auto-deploys to Vercel preview
+- Client approval triggers merge to main → production
+
+## API Routes
+
+- `POST /api/auth/login` - Send magic link
+- `GET /api/auth/verify` - Verify magic link and create session
+- `POST /api/auth/logout` - Clear session
+- `GET /api/auth/me` - Get current user
+- `GET /api/requests` - List user's requests
+- `POST /api/requests` - Create new request
+- `GET /api/requests/[id]` - Get request details
+- `PATCH /api/requests/[id]` - Update request
+- `POST /api/requests/[id]/approve` - Approve and merge to production
+- `POST /api/requests/[id]/reject` - Reject with feedback
+
+## Database Schema
+
+### User
+
+```typescript
+{
+  email: string;
+  name?: string;
+  clientSites: string[]; // GitHub repo names
+}
+```
+
+### ChangeRequest
+
+```typescript
+{
+  id: string;
+  userEmail: string;
+  siteRepo: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'staging' | 'approved' | 'rejected' | 'deployed';
+  stagingBranch?: string;
+  previewUrl?: string;
+  prNumber?: number;
+  feedback?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+## Roadmap
+
+### Phase 1 (MVP) ✅
+- Magic link authentication
+- Dashboard and request management
+- GitHub/Vercel integration
+- Manual code changes
+
+### Phase 2 (Next)
+- AI-powered code generation
+- Automated staging deployments
+- Real database (Postgres/Redis)
+- Multi-tenant admin panel
+- Billing integration
+
+## License
+
+MIT
