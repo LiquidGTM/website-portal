@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { createMagicLink, getUser, createUser } from '@/lib/db';
-import { randomBytes } from 'crypto';
+import { getUser, createUser } from '@/lib/db';
+import { createMagicToken } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   const resend = new Resend(process.env.RESEND_API_KEY);
@@ -15,9 +15,8 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Generate magic link token
-    const token = randomBytes(32).toString('hex');
-    createMagicLink(email, token);
+    // Generate signed magic link token (JWT, no DB needed)
+    const token = await createMagicToken(email);
     
     // Ensure user exists
     let user = getUser(email);

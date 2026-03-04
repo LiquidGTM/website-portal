@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
-import { verifyMagicLink } from '@/lib/db';
-import { setSession } from '@/lib/auth';
+import { verifyMagicToken, setSession } from '@/lib/auth';
 
 export default async function VerifyPage({
   searchParams,
@@ -20,7 +19,7 @@ export default async function VerifyPage({
     );
   }
 
-  const email = verifyMagicLink(token);
+  const email = await verifyMagicToken(token);
 
   if (!email) {
     return (

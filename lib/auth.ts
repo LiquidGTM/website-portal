@@ -5,6 +5,25 @@ const secret = new TextEncoder().encode(
   process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production'
 );
 
+// Magic link tokens (short-lived JWTs, no DB needed)
+export async function createMagicToken(email: string) {
+  return await new SignJWT({ email, purpose: 'magic-link' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setExpirationTime('15m')
+    .setIssuedAt()
+    .sign(secret);
+}
+
+export async function verifyMagicToken(token: string): Promise<string | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret);
+    if (payload.purpose !== 'magic-link') return null;
+    return payload.email as string;
+  } catch {
+    return null;
+  }
+}
+
 export async function createToken(email: string) {
   return await new SignJWT({ email })
     .setProtectedHeader({ alg: 'HS256' })
