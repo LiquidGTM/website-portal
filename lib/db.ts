@@ -64,6 +64,20 @@ export function getUser(email: string): User | null {
   return users.get(email) || null;
 }
 
+// Returns existing user or creates one (safe for serverless — no state dependency)
+export function getOrCreateUser(email: string): User {
+  const existing = users.get(email);
+  if (existing) return existing;
+  
+  // Default sites for any authenticated user (MVP — replace with real DB)
+  const user: User = {
+    email,
+    clientSites: ['LiquidGTM/v0-data-shapes-ai-website'],
+  };
+  users.set(email, user);
+  return user;
+}
+
 export function createUser(email: string, clientSites: string[] = []): User {
   const user: User = {
     email,
