@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
-import { getUser, createUser } from '@/lib/db';
+import { getOrCreateUser } from '@/lib/db';
 import { createMagicToken } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
@@ -19,10 +19,7 @@ export async function POST(request: NextRequest) {
     const token = await createMagicToken(email);
     
     // Ensure user exists
-    let user = getUser(email);
-    if (!user) {
-      user = createUser(email, ['LiquidGTM/v0-data-shapes-ai-website']);
-    }
+    await getOrCreateUser(email);
     
     // Generate magic link URL
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';

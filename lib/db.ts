@@ -1,18 +1,23 @@
-// Simple in-memory database for MVP
-// Replace with Vercel Postgres or Upstash Redis in production
+import { neon } from '@neondatabase/serverless';
 
+const sql = neon(process.env.POSTGRES_URL!);
+
+// Default sites assigned to new users (MVP — later make this configurable)
+const DEFAULT_CLIENT_SITES = ['LiquidGTM/v0-data-shapes-ai-website'];
+
+// Types
 export type User = {
   email: string;
   name?: string;
-  clientSites: string[]; // GitHub repo names
+  clientSites: string[];
 };
 
-export type ChangeRequestStatus = 
-  | 'pending' 
-  | 'in_progress' 
-  | 'staging' 
-  | 'approved' 
-  | 'rejected' 
+export type ChangeRequestStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'staging'
+  | 'approved'
+  | 'rejected'
   | 'deployed';
 
 export type ChangeRequest = {
@@ -29,134 +34,137 @@ export type ChangeRequest = {
   updatedAt: string;
 };
 
-// In-memory storage (replace with real DB)
-const users: Map<string, User> = new Map();
-const changeRequests: Map<string, ChangeRequest> = new Map();
-const magicLinks: Map<string, { email: string; expiresAt: number }> = new Map();
+// ── User functions ──
 
-// Initialize with test user
-users.set('test@example.com', {
-  email: 'test@example.com',
-  name: 'Test User',
-  clientSites: ['LiquidGTM/v0-data-shapes-ai-website'],
-});
-
-// Magic Link functions
-export function createMagicLink(email: string, token: string) {
-  magicLinks.set(token, {
-    email,
-    expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
-  });
+function rowToUser(row: Record<string, unknown>): User {
+  return {
+    email: row.email as string,
+    name: (row.name as string) || undefined,
+    clientSites: (row.client_sites as string[]) || [],
+  };
 }
 
-export function verifyMagicLink(token: string): string | null {
-  const link = magicLinks.get(token);
-  if (!link || link.expiresAt < Date.now()) {
-    magicLinks.delete(token);
-    return null;
-  }
-  magicLinks.delete(token);
-  return link.email;
+export async function getUser(email: string): Promise<User | null> {
+  const rows = await sql`SELECT * FROM users WHERE email = ${email}`;
+  return rows.length > 0 ? rowToUser(rows[0]) : null;
 }
 
-// User functions
-export function getUser(email: string): User | null {
-  return users.get(email) || null;
-}
-
-// Returns existing user or creates one (safe for serverless — no state dependency)
-export function getOrCreateUser(email: string): User {
-  const existing = users.get(email);
+export async function getOrCreateUser(email: string): Promise<User> {
+  const existing = await getUser(email);
   if (existing) return existing;
-  
-  // Default sites for any authenticated user (MVP — replace with real DB)
-  const user: User = {
-    email,
-    clientSites: ['LiquidGTM/v0-data-shapes-ai-website'],
+  return await createUser(email, DEFAULT_CLIENT_SITES);
+}
+
+export async function createUser(email: string, clientSites: string[] = DEFAULT_CLIENT_SITES): Promise<User> {
+  const rows = await sql`
+    INSERT INTO users (email, client_sites)
+    VALUES (${email}, ${clientSites})
+    ON CONFLICT (email) DO UPDATE SET updated_at = NOW()
+    RETURNING *
+  `;
+  return rowToUser(rows[0]);
+}
+
+export async function updateUser(email: string, updates: Partial<User>): Promise<User | null> {
+  const existing = await getUser(email);
+  if (!existing) return null;
+
+  const name = updates.name !== undefined ? updates.name : existing.name;
+  const clientSites = updates.clientSites !== undefined ? updates.clientSites : existing.clientSites;
+
+  const rows = await sql`
+    UPDATE users
+    SET name = ${name ?? null}, client_sites = ${clientSites}, updated_at = NOW()
+    WHERE email = ${email}
+    RETURNING *
+  `;
+  return rows.length > 0 ? rowToUser(rows[0]) : null;
+}
+
+export async function getAllUsers(): Promise<User[]> {
+  const rows = await sql`SELECT * FROM users ORDER BY created_at`;
+  return rows.map(rowToUser);
+}
+
+// ── Change Request functions ──
+
+function rowToChangeRequest(row: Record<string, unknown>): ChangeRequest {
+  return {
+    id: row.id as string,
+    userEmail: row.user_email as string,
+    siteRepo: row.site_repo as string,
+    description: row.description as string,
+    status: row.status as ChangeRequestStatus,
+    stagingBranch: (row.staging_branch as string) || undefined,
+    previewUrl: (row.preview_url as string) || undefined,
+    prNumber: (row.pr_number as number) || undefined,
+    feedback: (row.feedback as string) || undefined,
+    createdAt: (row.created_at as Date).toISOString(),
+    updatedAt: (row.updated_at as Date).toISOString(),
   };
-  users.set(email, user);
-  return user;
 }
 
-export function createUser(email: string, clientSites: string[] = []): User {
-  const user: User = {
-    email,
-    clientSites,
-  };
-  users.set(email, user);
-  return user;
+export async function getChangeRequest(id: string): Promise<ChangeRequest | null> {
+  const rows = await sql`SELECT * FROM change_requests WHERE id = ${id}`;
+  return rows.length > 0 ? rowToChangeRequest(rows[0]) : null;
 }
 
-export function updateUser(email: string, updates: Partial<User>): User | null {
-  const user = users.get(email);
-  if (!user) return null;
-  
-  const updated = { ...user, ...updates };
-  users.set(email, updated);
-  return updated;
+export async function getChangeRequestsByUser(email: string): Promise<ChangeRequest[]> {
+  const rows = await sql`
+    SELECT * FROM change_requests WHERE user_email = ${email} ORDER BY created_at DESC
+  `;
+  return rows.map(rowToChangeRequest);
 }
 
-// Change Request functions
-export function getChangeRequest(id: string): ChangeRequest | null {
-  return changeRequests.get(id) || null;
+export async function getChangeRequestsBySite(siteRepo: string): Promise<ChangeRequest[]> {
+  const rows = await sql`
+    SELECT * FROM change_requests WHERE site_repo = ${siteRepo} ORDER BY created_at DESC
+  `;
+  return rows.map(rowToChangeRequest);
 }
 
-export function getChangeRequestsByUser(email: string): ChangeRequest[] {
-  return Array.from(changeRequests.values())
-    .filter(req => req.userEmail === email)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-}
-
-export function getChangeRequestsBySite(siteRepo: string): ChangeRequest[] {
-  return Array.from(changeRequests.values())
-    .filter(req => req.siteRepo === siteRepo)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-}
-
-export function createChangeRequest(
+export async function createChangeRequest(
   userEmail: string,
   siteRepo: string,
   description: string
-): ChangeRequest {
+): Promise<ChangeRequest> {
   const id = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const now = new Date().toISOString();
-  
-  const request: ChangeRequest = {
-    id,
-    userEmail,
-    siteRepo,
-    description,
-    status: 'pending',
-    createdAt: now,
-    updatedAt: now,
-  };
-  
-  changeRequests.set(id, request);
-  return request;
+  const rows = await sql`
+    INSERT INTO change_requests (id, user_email, site_repo, description)
+    VALUES (${id}, ${userEmail}, ${siteRepo}, ${description})
+    RETURNING *
+  `;
+  return rowToChangeRequest(rows[0]);
 }
 
-export function updateChangeRequest(
+export async function updateChangeRequest(
   id: string,
   updates: Partial<Omit<ChangeRequest, 'id' | 'createdAt'>>
-): ChangeRequest | null {
-  const request = changeRequests.get(id);
-  if (!request) return null;
-  
-  const updated = {
-    ...request,
-    ...updates,
-    updatedAt: new Date().toISOString(),
-  };
-  
-  changeRequests.set(id, updated);
-  return updated;
+): Promise<ChangeRequest | null> {
+  const existing = await getChangeRequest(id);
+  if (!existing) return null;
+
+  const status = updates.status ?? existing.status;
+  const stagingBranch = updates.stagingBranch !== undefined ? updates.stagingBranch : existing.stagingBranch;
+  const previewUrl = updates.previewUrl !== undefined ? updates.previewUrl : existing.previewUrl;
+  const prNumber = updates.prNumber !== undefined ? updates.prNumber : existing.prNumber;
+  const feedback = updates.feedback !== undefined ? updates.feedback : existing.feedback;
+
+  const rows = await sql`
+    UPDATE change_requests
+    SET status = ${status},
+        staging_branch = ${stagingBranch ?? null},
+        preview_url = ${previewUrl ?? null},
+        pr_number = ${prNumber ?? null},
+        feedback = ${feedback ?? null},
+        updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return rows.length > 0 ? rowToChangeRequest(rows[0]) : null;
 }
 
-export function getAllUsers(): User[] {
-  return Array.from(users.values());
-}
-
-export function getAllChangeRequests(): ChangeRequest[] {
-  return Array.from(changeRequests.values())
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+export async function getAllChangeRequests(): Promise<ChangeRequest[]> {
+  const rows = await sql`SELECT * FROM change_requests ORDER BY created_at DESC`;
+  return rows.map(rowToChangeRequest);
 }

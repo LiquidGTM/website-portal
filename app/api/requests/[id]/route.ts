@@ -18,7 +18,7 @@ export async function GET(
   }
   
   const { id } = await params;
-  const changeRequest = getChangeRequest(id);
+  const changeRequest = await getChangeRequest(id);
   
   if (!changeRequest) {
     return NextResponse.json(
@@ -27,7 +27,6 @@ export async function GET(
     );
   }
   
-  // Ensure user owns this request
   if (changeRequest.userEmail !== session.email) {
     return NextResponse.json(
       { error: 'Forbidden' },
@@ -55,7 +54,7 @@ export async function PATCH(
     const { id } = await params;
     const updates = await request.json();
     
-    const changeRequest = getChangeRequest(id);
+    const changeRequest = await getChangeRequest(id);
     
     if (!changeRequest) {
       return NextResponse.json(
@@ -64,7 +63,6 @@ export async function PATCH(
       );
     }
     
-    // Ensure user owns this request
     if (changeRequest.userEmail !== session.email) {
       return NextResponse.json(
         { error: 'Forbidden' },
@@ -72,7 +70,7 @@ export async function PATCH(
       );
     }
     
-    const updated = updateChangeRequest(id, updates);
+    const updated = await updateChangeRequest(id, updates);
     
     return NextResponse.json({ request: updated });
   } catch (error) {

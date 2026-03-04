@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     );
   }
   
-  const requests = getChangeRequestsByUser(session.email);
+  const requests = await getChangeRequestsByUser(session.email);
   
   return NextResponse.json({ requests });
 }

@@ -20,7 +20,7 @@ export async function POST(
   
   try {
     const { id } = await params;
-    const changeRequest = getChangeRequest(id);
+    const changeRequest = await getChangeRequest(id);
     
     if (!changeRequest) {
       return NextResponse.json(
@@ -29,7 +29,6 @@ export async function POST(
       );
     }
     
-    // Ensure user owns this request
     if (changeRequest.userEmail !== session.email) {
       return NextResponse.json(
         { error: 'Forbidden' },
@@ -37,7 +36,6 @@ export async function POST(
       );
     }
     
-    // Must be in staging status
     if (changeRequest.status !== 'staging') {
       return NextResponse.json(
         { error: 'Request must be in staging status to approve' },
@@ -45,14 +43,12 @@ export async function POST(
       );
     }
     
-    // Merge PR if exists
     if (changeRequest.prNumber) {
       const [owner, repo] = changeRequest.siteRepo.split('/');
       await mergePullRequest(owner, repo, changeRequest.prNumber);
     }
     
-    // Update status to approved (will be deployed automatically by Vercel)
-    const updated = updateChangeRequest(id, {
+    const updated = await updateChangeRequest(id, {
       status: 'deployed',
     });
     

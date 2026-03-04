@@ -12,8 +12,7 @@ export async function GET(request: NextRequest) {
     );
   }
   
-  // Always returns a user — creates one from JWT email if not in memory
-  const user = getOrCreateUser(session.email);
+  const user = await getOrCreateUser(session.email);
   
   return NextResponse.json({ user });
 }
